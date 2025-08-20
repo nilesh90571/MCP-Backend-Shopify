@@ -6,28 +6,24 @@ const app = express();
 app.use(express.json({ limit: '1mb' }));
 
 // ====== CORS Setup ======
-const allowed = (process.env.ALLOWED_ORIGINS || 'https://ptinilesh.myshopify.com')
-  .split(',')
-  .map(s => s.trim());
+const allowed = (process.env.ALLOWED_ORIGINS || "").split(',').map(s => s.trim());
 
 app.use(cors({
-  origin: (origin, cb) => {
-    // local requests (no origin)
-    if (!origin) return cb(null, true);
-
+  origin: function (origin, cb) {
+    if (!origin) return cb(null, true); // local / curl requests
     if (allowed.includes('*') || allowed.includes(origin)) {
       return cb(null, true);
     }
     console.warn(`❌ CORS blocked: ${origin}`);
     return cb(new Error('CORS blocked'));
-  }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
-app.options('*', (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "https://ptinilesh.myshopify.com");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.sendStatus(200);
-})
+
+// ✅ Preflight requests
+app.options('*', cors());
 
 // ====== Shopify Config ======
 const SHOP = process.env.SHOPIFY_STORE_DOMAIN;
