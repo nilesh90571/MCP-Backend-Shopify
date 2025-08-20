@@ -5,7 +5,7 @@ import cors from 'cors';
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 
-// CORS
+// CORS setup
 const allowed = (process.env.ALLOWED_ORIGINS || '*')
   .split(',')
   .map(s => s.trim());
@@ -21,19 +21,20 @@ const TOKEN = process.env.SHOPIFY_STOREFRONT_TOKEN;
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2024-07';
 
 if (!SHOP || !TOKEN) {
-  console.warn('⚠️  Missing SHOPIFY_STORE_DOMAIN or SHOPIFY_STOREFRONT_TOKEN in env');
+  console.warn('⚠️ Missing SHOPIFY_STORE_DOMAIN or SHOPIFY_STOREFRONT_TOKEN in env');
 }
 
 const SF_ENDPOINT = `https://${SHOP}/api/${API_VERSION}/graphql.json`;
 
+// ====== Session Handling ======
 const sessions = new Map();
-
 function getSessionId(req) {
   const sid = req.headers['x-session-id']?.toString();
   if (sid) return sid;
   return `${req.ip}:${req.headers['user-agent'] || ''}`.slice(0, 128);
 }
 
+// ====== Helper: Shopify Fetch ======
 async function shopifyFetch(query, variables = {}) {
   const res = await fetch(SF_ENDPOINT, {
     method: 'POST',
@@ -50,6 +51,7 @@ async function shopifyFetch(query, variables = {}) {
   return json.data;
 }
 
+// ====== GraphQL Queries ======
 const GQL = {
   SEARCH: `
     query Products($q: String!, $first: Int!) {
@@ -58,8 +60,9 @@ const GQL = {
           node {
             id
             title
+            handle
+            description
             featuredImage { url }
-            images(first: 1) { edges { node { url } } }
             priceRange {
               minVariantPrice { amount currencyCode }
             }
@@ -71,6 +74,26 @@ const GQL = {
                   price { amount currencyCode }
                 }
               }
+            }
+          }
+        }
+      }
+    }
+  `,
+  PRODUCT: `
+    query ProductByHandle($handle: String!) {
+      product(handle: $handle) {
+        id
+        title
+        description
+        featuredImage { url }
+        images(first: 5) { edges { node { url } } }
+        variants(first: 10) {
+          edges {
+            node {
+              id
+              title
+              price { amount currencyCode }
             }
           }
         }
@@ -95,6 +118,7 @@ const GQL = {
   `
 };
 
+// ====== Ensure Cart for Session ======
 async function ensureCartForSession(sessionId) {
   let s = sessions.get(sessionId);
   if (s?.cartId) return s;
@@ -108,6 +132,9 @@ async function ensureCartForSession(sessionId) {
   return s;
 }
 
+// ====== ROUTES ======
+
+// 🔹 Product Search
 app.post('/search', async (req, res) => {
   try {
     const { query, maxPrice } = req.body || {};
@@ -118,13 +145,14 @@ app.post('/search', async (req, res) => {
 
     const data = await shopifyFetch(GQL.SEARCH, { q, first: 10 });
     const items = (data.products.edges || []).map(({ node }) => {
-      const imgEdge = node.images?.edges?.[0];
       const vEdges = node.variants?.edges || [];
       return {
         id: node.id,
         title: node.title,
+        handle: node.handle,
+        description: node.description,
         price: node.priceRange?.minVariantPrice?.amount,
-        images: [{ url: (imgEdge?.node?.url || node.featuredImage?.url || '') }],
+        images: [{ url: node.featuredImage?.url }],
         variants: vEdges.map(e => ({
           id: e.node.id,
           title: e.node.title,
@@ -138,6 +166,18 @@ app.post('/search', async (req, res) => {
   }
 });
 
+// 🔹 Single Product by Handle
+app.get('/product/:handle', async (req, res) => {
+  try {
+    const { handle } = req.params;
+    const data = await shopifyFetch(GQL.PRODUCT, { handle });
+    res.json({ result: data.product });
+  } catch (e) {
+    res.status(500).json({ error: true, message: e.message });
+  }
+});
+
+// 🔹 Add to Cart
 app.post('/add-to-cart', async (req, res) => {
   try {
     const { variantId, quantity = 1 } = req.body || {};
@@ -161,6 +201,7 @@ app.post('/add-to-cart', async (req, res) => {
   }
 });
 
+// 🔹 Checkout Link
 app.post('/create-checkout', async (req, res) => {
   try {
     const sid = getSessionId(req);
@@ -171,6 +212,7 @@ app.post('/create-checkout', async (req, res) => {
   }
 });
 
+// ====== Start Server ======
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`MCP backend running on http://localhost:${port}`);
