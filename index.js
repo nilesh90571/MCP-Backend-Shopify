@@ -5,17 +5,25 @@ import cors from 'cors';
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 
-// CORS setup
+// ====== CORS Setup ======
 const allowed = (process.env.ALLOWED_ORIGINS || '*')
   .split(',')
   .map(s => s.trim());
+
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin || allowed.includes('*') || allowed.includes(origin)) return cb(null, true);
+    // local requests (no origin)
+    if (!origin) return cb(null, true);
+
+    if (allowed.includes('*') || allowed.includes(origin)) {
+      return cb(null, true);
+    }
+    console.warn(`❌ CORS blocked: ${origin}`);
     return cb(new Error('CORS blocked'));
   }
 }));
 
+// ====== Shopify Config ======
 const SHOP = process.env.SHOPIFY_STORE_DOMAIN;
 const TOKEN = process.env.SHOPIFY_STOREFRONT_TOKEN;
 const API_VERSION = process.env.SHOPIFY_API_VERSION || '2024-07';
@@ -34,7 +42,7 @@ function getSessionId(req) {
   return `${req.ip}:${req.headers['user-agent'] || ''}`.slice(0, 128);
 }
 
-// ====== Helper: Shopify Fetch ======
+// ====== Shopify Fetch Helper ======
 async function shopifyFetch(query, variables = {}) {
   const res = await fetch(SF_ENDPOINT, {
     method: 'POST',
@@ -44,10 +52,16 @@ async function shopifyFetch(query, variables = {}) {
     },
     body: JSON.stringify({ query, variables })
   });
+
   const json = await res.json();
-  if (!res.ok || json.errors) {
-    throw new Error(JSON.stringify(json.errors || json));
+
+  if (!res.ok) {
+    throw new Error(`Shopify API error: ${res.status} ${res.statusText}`);
   }
+  if (json.errors) {
+    throw new Error(`GraphQL errors: ${JSON.stringify(json.errors)}`);
+  }
+
   return json.data;
 }
 
@@ -162,6 +176,7 @@ app.post('/search', async (req, res) => {
     });
     res.json({ result: { items } });
   } catch (e) {
+    console.error('❌ /search error:', e.message);
     res.status(500).json({ error: true, message: e.message });
   }
 });
@@ -173,6 +188,7 @@ app.get('/product/:handle', async (req, res) => {
     const data = await shopifyFetch(GQL.PRODUCT, { handle });
     res.json({ result: data.product });
   } catch (e) {
+    console.error('❌ /product error:', e.message);
     res.status(500).json({ error: true, message: e.message });
   }
 });
@@ -193,10 +209,13 @@ app.post('/add-to-cart', async (req, res) => {
     const data = await shopifyFetch(GQL.CART_LINES_ADD, variables);
     const err = data.cartLinesAdd?.userErrors?.[0];
     if (err) throw new Error(err.message || 'cartLinesAdd error');
+
     const cart = data.cartLinesAdd.cart;
     sessions.set(sid, { cartId: cart.id, checkoutUrl: cart.checkoutUrl });
+
     res.json({ result: { cartId: cart.id, checkoutUrl: cart.checkoutUrl, totalQuantity: cart.totalQuantity } });
   } catch (e) {
+    console.error('❌ /add-to-cart error:', e.message);
     res.status(500).json({ error: true, message: e.message });
   }
 });
@@ -208,6 +227,7 @@ app.post('/create-checkout', async (req, res) => {
     const session = await ensureCartForSession(sid);
     res.json({ result: { checkoutUrl: session.checkoutUrl, cartId: session.cartId } });
   } catch (e) {
+    console.error('❌ /create-checkout error:', e.message);
     res.status(500).json({ error: true, message: e.message });
   }
 });
@@ -215,5 +235,6 @@ app.post('/create-checkout', async (req, res) => {
 // ====== Start Server ======
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
-  console.log(`MCP backend running on http://localhost:${port}`);
+  console.log(`✅ MCP backend running on http://localhost:${port}`);
 });
+ // Updated
