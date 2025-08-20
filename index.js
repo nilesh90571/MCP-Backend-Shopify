@@ -22,6 +22,12 @@ app.use(cors({
     return cb(new Error('CORS blocked'));
   }
 }));
+app.options('*', (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "https://ptinilesh.myshopify.com");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.sendStatus(200);
+})
 
 // ====== Shopify Config ======
 const SHOP = process.env.SHOPIFY_STORE_DOMAIN;
