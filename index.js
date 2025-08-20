@@ -6,11 +6,12 @@ const app = express();
 app.use(express.json({ limit: '1mb' }));
 
 // ====== CORS Setup ======
+// ====== CORS Setup ======
 const allowed = (process.env.ALLOWED_ORIGINS || "").split(',').map(s => s.trim());
 
-app.use(cors({
+const corsOptions = {
   origin: function (origin, cb) {
-    if (!origin) return cb(null, true); // local / curl requests
+    if (!origin) return cb(null, true); // allow server-to-server or curl
     if (allowed.includes('*') || allowed.includes(origin)) {
       return cb(null, true);
     }
@@ -20,10 +21,11 @@ app.use(cors({
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
-}));
+};
 
-// ✅ Preflight requests
-app.options('*', cors());
+app.use(cors(corsOptions));
+// ✅ Preflight requests with same config
+app.options('*', cors(corsOptions));
 
 // ====== Shopify Config ======
 const SHOP = process.env.SHOPIFY_STORE_DOMAIN;
