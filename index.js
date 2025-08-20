@@ -6,7 +6,7 @@ const app = express();
 app.use(express.json({ limit: '1mb' }));
 
 // ====== CORS Setup ======
-const allowed = (process.env.ALLOWED_ORIGINS || '*')
+const allowed = (process.env.ALLOWED_ORIGINS || 'https://ptinilesh.myshopify.com')
   .split(',')
   .map(s => s.trim());
 
