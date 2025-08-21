@@ -5,7 +5,12 @@ import fetch from 'node-fetch';
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  origin: "*",   // OR ["https://ptinilesh.myshopify.com"] for more security
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+app.use(express.json());
 
 const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN, PORT } = process.env;
 
