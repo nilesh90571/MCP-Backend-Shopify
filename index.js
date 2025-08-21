@@ -1,9 +1,10 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import fetch from 'node-fetch';
 
 const app = express();
+
+// ✅ CORS: Allow only your Shopify domain
 app.use(cors({
   origin: "https://ptinilesh.myshopify.com",
   methods: ["GET", "POST", "OPTIONS"],
@@ -11,9 +12,9 @@ app.use(cors({
 }));
 app.use(express.json());
 
-const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN, PORT } = process.env;
+const { SHOPIFY_STORE_DOMAIN, SHOPIFY_STOREFRONT_TOKEN } = process.env;
 
-// Function to search products
+// 🔎 Function to search products
 async function searchProducts(query) {
   const endpoint = `https://${SHOPIFY_STORE_DOMAIN}/api/2024-07/graphql.json`;
 
@@ -62,10 +63,12 @@ async function searchProducts(query) {
   });
 
   const result = await response.json();
+
+  if (!result.data?.products) return [];
   return result.data.products.edges.map(edge => edge.node);
 }
 
-// API route for chatbot product search
+// 🤖 API route for chatbot product search
 app.post("/chatbot/search", async (req, res) => {
   try {
     const { message } = req.body; // User message from chatbot
@@ -75,7 +78,7 @@ app.post("/chatbot/search", async (req, res) => {
       return res.json({ reply: `No products found for "${message}".` });
     }
 
-    // Reply format for chatbot
+    // Format chatbot reply
     const reply = products.map(p => ({
       title: p.title,
       url: `https://${SHOPIFY_STORE_DOMAIN}/products/${p.handle}`,
@@ -90,4 +93,5 @@ app.post("/chatbot/search", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
+// ✅ For Vercel: Export app instead of app.listen
+export default app;
