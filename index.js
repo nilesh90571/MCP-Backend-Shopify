@@ -4,9 +4,8 @@ import cors from 'cors';
 import fetch from 'node-fetch';
 
 const app = express();
-app.use(express.json());
 app.use(cors({
-  origin: "*",   // OR ["https://ptinilesh.myshopify.com"] for more security
+  origin: "https://ptinilesh.myshopify.com",
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
